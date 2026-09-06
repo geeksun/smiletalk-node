@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>私密微日志</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #c0deed;
+            color: #333; font-size: 14px; line-height: 1.5;
+        }
+        header {
+            background: #333; color: #fff; height: 42px;
+            position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+            display: flex; justify-content: center;
+        }
+        .nav {
+            width: 800px; max-width: 100%; padding: 0 15px;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .logo { font-weight: bold; font-size: 15px; }
+        .nav-actions button {
+            background: transparent; border: 1px solid #777; color: #fff;
+            padding: 3px 10px; border-radius: 3px; cursor: pointer;
+        }
+        .container {
+            width: 800px; max-width: 100%; margin: 55px auto 20px;
+            display: flex; gap: 15px; padding: 0 10px;
+        }
+        .sidebar { width: 260px; flex-shrink: 0; }
+        .main { flex-grow: 1; min-width: 0; }
+        .card {
+            background: #fff; border-radius: 5px;
+            border: 1px solid rgba(0,0,0,0.15); padding: 15px; margin-bottom: 15px;
+        }
+        .user-info { display: flex; gap: 12px; align-items: center; }
+        .avatar {
+            width: 44px; height: 44px; background: #0084b4; color: #fff;
+            font-size: 18px; font-weight: bold;
+            display: flex; align-items: center; justify-content: center; border-radius: 4px;
+            flex-shrink: 0;
+        }
+        textarea {
+            width: 100%; height: 75px; padding: 8px; border: 1px solid #ccc;
+            border-radius: 4px; resize: vertical; font-family: inherit; margin-top: 8px;
+        }
+        .pub-footer {
+            display: flex; justify-content: space-between; align-items: center; margin-top: 8px;
+        }
+        .btn-pub {
+            background: #0084b4; color: #fff; border: none;
+            padding: 6px 15px; border-radius: 4px; font-weight: bold; cursor: pointer;
+        }
+        .tweet-item { display: flex; gap: 12px; padding: 12px 15px; border-bottom: 1px solid #eee; }
+        .tweet-item:last-child { border-bottom: none; }
+        .tweet-content { margin-top: 4px; white-space: pre-wrap; word-break: break-word; }
+        .tweet-img { max-width: 100%; max-height: 300px; border-radius: 4px; margin-top: 8px; }
+        .tweet-meta { font-size: 12px; color: #888; margin-top: 6px; }
+        .action-del { color: #cc0000; cursor: pointer; margin-left: 10px; }
+
+        /* 用户关注列表样式 */
+        .user-follow-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 8px 0; border-bottom: 1px dashed #eee;
+        }
+        .user-follow-item:last-child { border-bottom: none; }
+        .btn-follow {
+            padding: 2px 8px; font-size: 12px; border-radius: 3px; border: 1px solid #0084b4;
+            background: #fff; color: #0084b4; cursor: pointer;
+        }
+        .btn-follow.following { background: #0084b4; color: #fff; }
+
+        /* 登录弹窗 (未登录时强制显示且无法关掉) */
+        .modal {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.65);
+            justify-content: center; align-items: center; z-index: 200;
+        }
+        .modal-content { background: #fff; padding: 25px; border-radius: 6px; width: 320px; }
+        .modal-content input {
+            width: 100%; padding: 10px; margin: 8px 0;
+            border: 1px solid #ccc; border-radius: 4px;
+        }
+        @media (max-width: 600px) {
+            .container { flex-direction: column; }
+            .sidebar { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="nav">
+        <div class="logo">Fanfou / 2012 Twitter</div>
+        <div class="nav-actions">
+            <button id="authBtn" onclick="handleAuthClick()">登录</button>
+        </div>
+    </div>
+</header>
+
+<div class="container">
+    <aside class="sidebar">
+        <div class="card">
+            <div class="user-info">
+                <div class="avatar" id="sidebarAvatar">?</div>
+                <div>
+                    <div style="font-weight:bold" id="sidebarName">未登录</div>
+                    <div style="color:#888;font-size:12px;" id="sidebarHandle">@guest</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 关注其他用户列表 -->
+        <div class="card" id="usersCard" style="display:none;">
+            <div style="font-weight:bold; margin-bottom:8px; color:#555;">发现用户 / 关注</div>
+            <div id="userList">加载中...</div>
+        </div>
+    </aside>
+
+    <main class="main">
+        <!-- 发布框 -->
+        <div class="card" id="publisherCard" style="display:none;">
+            <div style="font-weight:bold; color:#555;">你在做什么？</div>
+            <textarea id="tweetInput" placeholder="写点什么吧..." maxlength="140"></textarea>
+            <div class="pub-footer">
+                <input type="file" id="imageInput" accept="image/*" style="font-size:12px;">
+                <button class="btn-pub" onclick="postTweet()">发布</button>
+            </div>
+        </div>
+
+        <!-- 时间线列表 -->
+        <div class="card" style="padding:0;" id="tweetList">
+            <!-- 动态渲染 -->
+        </div>
+    </main>
+</div>
+
+<!-- 强制登录弹窗 -->
+<div class="modal" id="loginModal">
+    <div class="modal-content">
+        <h3 style="margin-bottom:10px; text-align:center;">请先登录</h3>
+        <p style="font-size:12px; color:#666; margin-bottom:10px; text-align:center;">此平台为私密网络，登录后方可浏览内容</p>
+        <input type="text" id="loginUser" placeholder="用户名">
+        <input type="password" id="loginPass" placeholder="密码">
+        <button class="btn-pub" style="width:100%; margin-top:10px; height:36px;" onclick="submitLogin()">登录</button>
+    </div>
+</div>
+
+<script>
+    let currentUser = null;
+    let token = localStorage.getItem('token');
+
+    document.addEventListener('DOMContentLoaded', () => {
+        checkAuth();
+    });
+
+    // 鉴权检查
+    async function checkAuth() {
+        if (!token) {
+            logoutUI();
+            return;
+        }
+        try {
+            const res = await fetch('/api/me', { headers: { 'Authorization': `Bearer ${token}` } });
+            if (res.ok) {
+                const data = await res.json();
+                currentUser = data.user;
+                loginUI();
+                loadTweets();
+                loadUsers();
+            } else {
+                logout();
+            }
+        } catch (e) {
+            logout();
+        }
+    }
+
+    function loginUI() {
+        document.getElementById('sidebarName').textContent = currentUser.name;
+        document.getElementById('sidebarHandle').textContent = `@${currentUser.username}`;
+        document.getElementById('sidebarAvatar').textContent = currentUser.name[0].toUpperCase();
+        document.getElementById('publisherCard').style.display = 'block';
+        document.getElementById('usersCard').style.display = 'block';
+        document.getElementById('authBtn').textContent = '退出登录';
+        document.getElementById('loginModal').style.display = 'none';
+    }
+
+    function logoutUI() {
+        currentUser = null;
+        document.getElementById('sidebarName').textContent = '未登录';
+        document.getElementById('sidebarHandle').textContent = '@guest';
+        document.getElementById('sidebarAvatar').textContent = '?';
+        document.getElementById('publisherCard').style.display = 'none';
+        document.getElementById('usersCard').style.display = 'none';
+        document.getElementById('authBtn').textContent = '登录';
+        document.getElementById('tweetList').innerHTML = `<div style="padding:30px; text-align:center; color:#888;">该应用为私密日志，请先登录</div>`;
+        // 未登录时强制弹出登录对话框
+        document.getElementById('loginModal').style.display = 'flex';
+    }
+
+    function handleAuthClick() {
+        if (currentUser) {
+            logout();
+        } else {
+            document.getElementById('loginModal').style.display = 'flex';
+        }
+    }
+
+    // 完善的submitLogin提交方法
+    async function submitLogin() {
+        const username = document.getElementById('loginUser').value.trim();
+        const password = document.getElementById('loginPass').value.trim();
+
+        if (!username || !password) {
+            alert('请输入用户名和密码');
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            const data = await res.json();
+
+            if (res.ok) {
+                localStorage.setItem('token', data.token);
+                token = data.token;
+                currentUser = data.user;
+
+                // 清空输入框
+                document.getElementById('loginUser').value = '';
+                document.getElementById('loginPass').value = '';
+
+                loginUI();
+                loadTweets();
+                loadUsers();
+            } else {
+                alert(data.error || '登录失败');
+            }
+        } catch (e) {
+            alert('网络请求失败，请检查服务器连接');
+        }
+    }
+
+    function logout() {
+        localStorage.removeItem('token');
+        token = null;
+        logoutUI();
+    }
+
+    // 获取并渲染我的时间线推文 (只展示自己 + 关注的人)
+    async function loadTweets() {
+        const tweetList = document.getElementById('tweetList');
+        try {
+            const res = await fetch('/api/tweets', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!res.ok) {
+                if (res.status === 401 || res.status === 403) logout();
+                return;
+            }
+
+            const tweets = await res.json();
+
+            if (tweets.length === 0) {
+                tweetList.innerHTML = `<div style="padding:30px; text-align:center; color:#888;">暂无推文。快发一条动态，或关注其他用户吧！</div>`;
+                return;
+            }
+
+            tweetList.innerHTML = tweets.map(t => {
+                const canDelete = currentUser && currentUser.id === t.user_id;
+                const timeStr = new Date(t.created_at).toLocaleString();
+                return `
+            <div class="tweet-item">
+              <div class="avatar">${escapeHTML(t.display_name[0])}</div>
+              <div style="flex:1;">
+                <div>
+                  <strong>${escapeHTML(t.display_name)}</strong>
+                  <span style="color:#888; font-size:12px;">@${escapeHTML(t.username)}</span>
+                </div>
+                <div class="tweet-content">${escapeHTML(t.content)}</div>
+                ${t.image_url ? `<img src="${t.image_url}" class="tweet-img">` : ''}
+                <div class="tweet-meta">
+                  ${timeStr}
+                  ${canDelete ? `<span class="action-del" onclick="deleteTweet(${t.id})">删除</span>` : ''}
+                </div>
+              </div>
+            </div>
+          `;
+            }).join('');
+        } catch (e) {
+            tweetList.innerHTML = `<div style="padding:20px; text-align:center; color:#cc0000;">加载推文失败</div>`;
+        }
+    }
+
+    // 发布推文
+    async function postTweet() {
+        const content = document.getElementById('tweetInput').value.trim();
+        const imageFile = document.getElementById('imageInput').files[0];
+
+        if (!content && !imageFile) return alert('请输入内容或选择图片');
+
+        const formData = new FormData();
+        formData.append('content', content);
+        if (imageFile) formData.append('image', imageFile);
+
+        const res = await fetch('/api/tweets', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` },
+            body: formData
+        });
+
+        if (res.ok) {
+            document.getElementById('tweetInput').value = '';
+            document.getElementById('imageInput').value = '';
+            loadTweets();
+        } else {
+            alert('发布失败');
+        }
+    }
+
+    // 删除推文
+    async function deleteTweet(id) {
+        if (!confirm('确定删除吗？')) return;
+        const res = await fetch(`/api/tweets/${id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) loadTweets();
+        else alert('删除失败');
+    }
+
+    // 加载可关注的用户列表
+    async function loadUsers() {
+        const userListEl = document.getElementById('userList');
+        try {
+            const res = await fetch('/api/users', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!res.ok) return;
+
+            const users = await res.json();
+            if (users.length === 0) {
+                userListEl.innerHTML = `<div style="color:#888; font-size:12px;">暂无其他用户</div>`;
+                return;
+            }
+
+            userListEl.innerHTML = users.map(u => `
+          <div class="user-follow-item">
+            <div>
+              <div style="font-weight:bold;">${escapeHTML(u.display_name)}</div>
+              <div style="font-size:11px; color:#888;">@${escapeHTML(u.username)}</div>
+            </div>
+            <button class="btn-follow ${u.is_following ? 'following' : ''}" onclick="toggleFollow(${u.id})">
+              ${u.is_following ? '已关注' : '+ 关注'}
+            </button>
+          </div>
+        `).join('');
+        } catch (e) {
+            userListEl.innerHTML = `<div style="color:#888; font-size:12px;">加载失败</div>`;
+        }
+    }
+
+    // 关注 / 取消关注 操作
+    async function toggleFollow(targetId) {
+        try {
+            const res = await fetch(`/api/follow/${targetId}`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                // 重新加载用户状态与时间线列表
+                loadUsers();
+                loadTweets();
+            }
+        } catch (e) {
+            alert('操作失败');
+        }
+    }
+
+    function escapeHTML(str) {
+        return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag));
+    }
+</script>
+</body>
+</html>
